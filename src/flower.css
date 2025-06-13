@@ -1,4 +1,4 @@
-/* 3D Animated Flower */
+/* Simple Working 3D Flower */
 .geometric-shape {
     width: 400px;
     height: 400px;
@@ -8,7 +8,7 @@
     align-items: center;
     justify-content: center;
     cursor: grab;
-    transition: transform 0.2s ease;
+    transition: transform 0.3s ease;
     transform-style: preserve-3d;
 }
 
@@ -26,7 +26,7 @@
     position: relative;
     transform-style: preserve-3d;
     animation: rotate3d 20s linear infinite;
-    transition: transform 0.1s ease;
+    transition: transform 0.2s ease;
 }
 
 .flower-petal {
@@ -41,7 +41,7 @@
     box-shadow: 
         0 0 30px rgba(168, 85, 247, 0.4),
         inset 0 0 20px rgba(255, 255, 255, 0.1);
-    transition: var(--transition-base);
+    transition: all 0.3s ease;
     cursor: pointer;
 }
 
@@ -89,7 +89,7 @@
 
 .flower-petal:nth-child(8) {
     transform: translate(-50%, -50%) rotateZ(315deg) rotateX(20deg);
-    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+    background: linear-gradient(135deg, #8b5cf6 0%, var(--color-primary) 100%);
 }
 
 .flower-center {
@@ -105,7 +105,7 @@
         0 0 20px rgba(251, 191, 36, 0.6),
         inset 0 0 15px rgba(255, 255, 255, 0.3);
     z-index: 10;
-    transition: var(--transition-base);
+    transition: all 0.3s ease;
     cursor: pointer;
 }
 
