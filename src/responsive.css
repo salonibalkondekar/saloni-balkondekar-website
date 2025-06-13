@@ -1,0 +1,52 @@
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .container {
+        padding: var(--spacing-xl) var(--spacing-md);
+    }
+    
+    .right-section {
+        flex: 0 0 300px;
+        height: 80vh;
+    }
+    
+    .geometric-shape {
+        width: 300px;
+        height: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+        text-align: center;
+        min-height: 100vh;
+    }
+    
+    .left-section {
+        padding: var(--spacing-xl) var(--spacing-md);
+        max-width: none;
+        flex: none;
+    }
+    
+    .right-section {
+        flex: none;
+        padding: var(--spacing-md);
+        height: 60vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .main-title {
+        font-size: 2.5rem;
+    }
+
+    .subtitle {
+        font-size: 1.2rem;
+    }
+    
+    .geometric-shape {
+        width: 250px;
+        height: 250px;
+    }
+}
