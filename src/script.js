@@ -28,6 +28,11 @@ geometricShape.addEventListener('mousedown', function(e) {
     startY = e.clientY;
     this.style.cursor = 'grabbing';
     flowerContainer.style.animationPlayState = 'paused';
+    // Disable hover effects during drag
+    this.style.pointerEvents = 'none';
+    setTimeout(() => {
+        this.style.pointerEvents = 'auto';
+    }, 50);
 });
 
 document.addEventListener('mousemove', function(e) {
@@ -74,42 +79,46 @@ geometricShape.addEventListener('dblclick', function() {
 // Individual petal click effects (simplified to reduce glitchiness)
 flowerPetals.forEach((petal, index) => {
     petal.addEventListener('click', function(e) {
+        if (isDragging) return; // Don't trigger during drag
         e.stopPropagation();
         
-        // Simple pulse effect
-        this.style.transform += ' scale(1.15)';
-        this.style.filter = 'brightness(1.3)';
+        // Simple pulse effect that preserves the original transform
+        const originalTransform = this.style.transform;
+        this.style.transform = originalTransform + ' scale(1.1)';
+        this.style.filter = 'brightness(1.2)';
         
         setTimeout(() => {
-            this.style.transform = this.style.transform.replace(' scale(1.15)', '');
+            this.style.transform = originalTransform;
             this.style.filter = '';
-        }, 400);
+        }, 300);
     });
 });
 
 // Flower center interaction
 flowerCenter.addEventListener('click', function(e) {
+    if (isDragging) return; // Don't trigger during drag
     e.stopPropagation();
     
     // Gentle wave effect through petals
     flowerPetals.forEach((petal, index) => {
         setTimeout(() => {
-            petal.style.transform += ' scale(1.1)';
-            petal.style.filter = 'brightness(1.2) saturate(1.3)';
+            const originalTransform = petal.style.transform;
+            petal.style.transform = originalTransform + ' scale(1.08)';
+            petal.style.filter = 'brightness(1.15) saturate(1.2)';
             
             setTimeout(() => {
-                petal.style.transform = petal.style.transform.replace(' scale(1.1)', '');
+                petal.style.transform = originalTransform;
                 petal.style.filter = '';
-            }, 300);
-        }, index * 100);
+            }, 250);
+        }, index * 80);
     });
     
     // Center glow
-    this.style.filter = 'brightness(1.4) drop-shadow(0 0 20px #fbbf24)';
+    this.style.filter = 'brightness(1.3) drop-shadow(0 0 15px #fbbf24)';
     
     setTimeout(() => {
         this.style.filter = '';
-    }, 800);
+    }, 600);
 });
 
 // Gentle mouse tracking (reduced intensity)
@@ -123,10 +132,12 @@ geometricShape.addEventListener('mousemove', function(e) {
     const deltaX = (e.clientX - centerX) / (rect.width / 2);
     const deltaY = (e.clientY - centerY) / (rect.height / 2);
     
-    const rotateX = deltaY * 5; // Reduced from 10
-    const rotateY = deltaX * 5; // Reduced from 10
+    const rotateX = deltaY * 3; // Further reduced for smoother interaction
+    const rotateY = deltaX * 3; // Further reduced for smoother interaction
     
-    this.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+    if (!this.style.transform.includes('perspective')) {
+        this.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+    }
 });
 
 geometricShape.addEventListener('mouseleave', function() {

@@ -7,6 +7,9 @@
     .right-section {
         flex: 0 0 300px;
         height: 80vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
     
     .geometric-shape {

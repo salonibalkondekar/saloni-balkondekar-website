@@ -41,6 +41,7 @@ body {
 
 .container {
     display: flex;
+    height: 100vh;
     min-height: 100vh;
     position: relative;
     z-index: 1;
@@ -48,7 +49,7 @@ body {
     margin: 0 auto;
     padding: 0 var(--spacing-xl);
     justify-content: space-between;
-    align-items: center;
+    align-items: stretch;
 }
 
 .left-section {
@@ -65,8 +66,8 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: var(--spacing-xl);
-    height: 100vh;
+    padding: 0;
+    height: 100%;
 }
 
 .main-title {
