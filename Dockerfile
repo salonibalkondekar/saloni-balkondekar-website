@@ -1,5 +1,6 @@
 FROM nginx:stable-alpine
 
-COPY ./index.html /usr/share/nginx/html/index.html
+COPY index.html /usr/share/nginx/html/
+COPY src/ /usr/share/nginx/html/src/
 
 EXPOSE 80

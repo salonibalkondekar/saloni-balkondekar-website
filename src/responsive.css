@@ -21,7 +21,7 @@
 @media (max-width: 768px) {
     .container {
         flex-direction: column;
-        text-align: center;
+        text-align: left;
         min-height: 100vh;
     }
     
@@ -29,6 +29,7 @@
         padding: var(--spacing-xl) var(--spacing-md);
         max-width: none;
         flex: none;
+        text-align: left;
     }
     
     .right-section {
