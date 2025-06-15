@@ -145,3 +145,140 @@ geometricShape.addEventListener('mouseleave', function() {
         this.style.transform = '';
     }
 });
+
+// Portfolio Analytics Tracking
+class PortfolioAnalytics {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        // Track page view
+        this.trackPageView();
+        
+        // Add click tracking to all links
+        this.setupLinkTracking();
+        
+        // Track scroll behavior
+        this.setupScrollTracking();
+    }
+
+    async trackPageView() {
+        try {
+            await fetch('/analytics/track/pageview', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    site: 'portfolio',
+                    path: window.location.pathname
+                })
+            });
+            console.log('📊 Portfolio page view tracked');
+        } catch (error) {
+            console.log('❌ Failed to track page view:', error);
+        }
+    }
+
+    setupLinkTracking() {
+        // Track all links with data-track attribute
+        document.querySelectorAll('a[data-track]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const trackType = link.getAttribute('data-track');
+                const metadata = {};
+                
+                // Collect additional metadata based on track type
+                switch (trackType) {
+                    case 'project-link':
+                        metadata.project = link.getAttribute('data-project');
+                        metadata.url = link.href;
+                        break;
+                    case 'social-link':
+                        metadata.platform = link.getAttribute('data-platform');
+                        metadata.url = link.href;
+                        break;
+                    case 'contact-link':
+                        metadata.type = link.getAttribute('data-type');
+                        metadata.contact = link.href;
+                        break;
+                }
+                
+                this.trackLinkClick(trackType, metadata);
+            });
+        });
+    }
+
+    async trackLinkClick(linkType, metadata) {
+        try {
+            await fetch('/analytics/track/link-click', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    site: 'portfolio',
+                    link_type: linkType,
+                    metadata: metadata,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            console.log(`📊 Link click tracked: ${linkType}`, metadata);
+        } catch (error) {
+            console.log('❌ Failed to track link click:', error);
+        }
+    }
+
+    setupScrollTracking() {
+        let maxScrollPercentage = 0;
+        let scrollTimeout;
+
+        window.addEventListener('scroll', () => {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                const scrollPercent = Math.round(
+                    (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100
+                );
+                
+                if (scrollPercent > maxScrollPercentage) {
+                    maxScrollPercentage = scrollPercent;
+                    
+                    // Track significant scroll milestones
+                    if (scrollPercent >= 25 && scrollPercent < 50) {
+                        this.trackScrollMilestone(25);
+                    } else if (scrollPercent >= 50 && scrollPercent < 75) {
+                        this.trackScrollMilestone(50);
+                    } else if (scrollPercent >= 75 && scrollPercent < 90) {
+                        this.trackScrollMilestone(75);
+                    } else if (scrollPercent >= 90) {
+                        this.trackScrollMilestone(90);
+                    }
+                }
+            }, 100);
+        });
+    }
+
+    async trackScrollMilestone(percentage) {
+        try {
+            await fetch('/analytics/track/scroll', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    site: 'portfolio',
+                    scroll_percentage: percentage,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            console.log(`📊 Scroll milestone tracked: ${percentage}%`);
+        } catch (error) {
+            console.log('❌ Failed to track scroll:', error);
+        }
+    }
+}
+
+// Initialize analytics when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    new PortfolioAnalytics();
+});
