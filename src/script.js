@@ -146,10 +146,157 @@ geometricShape.addEventListener('mouseleave', function() {
     }
 });
 
-// Portfolio Analytics Tracking
+
+// Medium Blog Integration
+class MediumBlogIntegration {
+    constructor() {
+        this.username = 'saloni.balkondekar';
+        this.apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=https://medium.com/feed/@${this.username}`;
+        this.maxArticles = 3;
+        this.blogContainer = document.getElementById('blog-articles');
+        this.init();
+    }
+
+    init() {
+        this.fetchBlogPosts();
+    }
+
+    async fetchBlogPosts() {
+        try {
+            const response = await fetch(this.apiUrl);
+            const data = await response.json();
+            
+            if (data.status === 'ok' && data.items) {
+                this.renderBlogPosts(data.items.slice(0, this.maxArticles));
+            } else {
+                throw new Error('Failed to fetch blog posts');
+            }
+        } catch (error) {
+            console.error('Error fetching Medium posts:', error);
+            this.showError();
+        }
+    }
+
+    renderBlogPosts(posts) {
+        const blogHtml = posts.map(post => {
+            const publishDate = new Date(post.pubDate).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+            
+            const readTime = this.calculateReadTime(post.content);
+            const excerpt = this.extractExcerpt(post.content);
+            const thumbnail = this.extractThumbnail(post);
+            
+            return `
+                <article class="blog-article clickable-article" 
+                         data-url="${post.link}" 
+                         data-track="blog-article" 
+                         data-title="${post.title.replace(/"/g, '&quot;')}"
+                         data-date="${publishDate}">
+                    ${thumbnail ? `
+                        <div class="blog-article-image">
+                            <img src="${thumbnail}" alt="${post.title}" loading="lazy">
+                        </div>
+                    ` : ''}
+                    <div class="blog-article-content">
+                        <h4 class="blog-article-title">${post.title}</h4>
+                        <p class="blog-article-excerpt">${excerpt}</p>
+                        <div class="blog-article-meta">
+                            <span class="blog-article-date">${publishDate}</span>
+                            <span class="blog-article-read-time">${readTime} min read</span>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }).join('');
+        
+        this.blogContainer.innerHTML = blogHtml;
+        
+        // Add click tracking for blog articles
+        this.setupBlogTracking();
+    }
+
+    extractExcerpt(content) {
+        // Remove HTML tags and get first 120 characters
+        const plainText = content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
+        return plainText.length > 120 ? plainText.substring(0, 120) + '...' : plainText;
+    }
+
+    extractThumbnail(post) {
+        // Medium RSS provides thumbnail in multiple ways
+        if (post.thumbnail) {
+            return post.thumbnail;
+        }
+        
+        // Try to extract from content
+        const imgRegex = /<img[^>]+src="([^">]+)"/i;
+        const match = post.content.match(imgRegex);
+        if (match) {
+            return match[1];
+        }
+        
+        // Try enclosure (some RSS feeds use this)
+        if (post.enclosure && post.enclosure.link) {
+            return post.enclosure.link;
+        }
+        
+        return null;
+    }
+
+    calculateReadTime(content) {
+        const wordsPerMinute = 200;
+        const plainText = content.replace(/<[^>]*>/g, '');
+        const wordCount = plainText.split(/\s+/).length;
+        return Math.ceil(wordCount / wordsPerMinute);
+    }
+
+    setupBlogTracking() {
+        const blogArticles = document.querySelectorAll('.clickable-article');
+        blogArticles.forEach(article => {
+            // Make entire article clickable
+            article.addEventListener('click', (e) => {
+                const title = article.getAttribute('data-title');
+                const date = article.getAttribute('data-date');
+                const url = article.getAttribute('data-url');
+                
+                // Track blog article click
+                if (window.portfolioAnalytics) {
+                    window.portfolioAnalytics.trackBlogClick({
+                        title: title,
+                        date: date,
+                        url: url
+                    });
+                }
+                
+                // Open article in new tab
+                window.open(url, '_blank');
+            });
+            
+            // Add cursor pointer and hover effects
+            article.style.cursor = 'pointer';
+        });
+    }
+
+    showError() {
+        this.blogContainer.innerHTML = `
+            <div class="blog-error">
+                Unable to load latest articles. 
+                <a href="https://medium.com/@${this.username}" target="_blank" style="color: var(--color-primary);">
+                    Visit Medium directly →
+                </a>
+            </div>
+        `;
+    }
+}
+
+// Enhanced Portfolio Analytics with Blog Tracking
 class PortfolioAnalytics {
     constructor() {
         this.init();
+        // Make analytics available globally for blog integration
+        window.portfolioAnalytics = this;
     }
 
     init() {
@@ -202,6 +349,10 @@ class PortfolioAnalytics {
                         metadata.type = link.getAttribute('data-type');
                         metadata.contact = link.href;
                         break;
+                    case 'blog-link':
+                        metadata.type = link.getAttribute('data-type');
+                        metadata.url = link.href;
+                        break;
                 }
                 
                 this.trackLinkClick(trackType, metadata);
@@ -226,6 +377,27 @@ class PortfolioAnalytics {
             console.log(`📊 Link click tracked: ${linkType}`, metadata);
         } catch (error) {
             console.log('❌ Failed to track link click:', error);
+        }
+    }
+
+    async trackBlogClick(articleData) {
+        try {
+            await fetch('/analytics/track/blog-click', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    site: 'portfolio',
+                    article_title: articleData.title,
+                    article_date: articleData.date,
+                    article_url: articleData.url,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            console.log('📊 Blog article click tracked:', articleData.title);
+        } catch (error) {
+            console.log('❌ Failed to track blog click:', error);
         }
     }
 
@@ -278,7 +450,8 @@ class PortfolioAnalytics {
     }
 }
 
-// Initialize analytics when DOM is loaded
+// Initialize analytics and blog integration when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new PortfolioAnalytics();
+    new MediumBlogIntegration();
 });
