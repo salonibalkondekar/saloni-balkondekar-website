@@ -9,7 +9,10 @@ It is a static website. All processing happens in the visitor's browser; scans, 
 1. Open the page and select a scanned PDF, JPG or PNG (or drop it anywhere on the page).
 2. Look over the results: each student has a photo, a signature and a name. Anything marked in amber needs a look.
 3. Fix or type names where needed.
-4. Press **Download ZIP**. It holds `photos/`, `signs/`, `names/` and `students.csv`.
+4. If a photo or signature is cut wrongly, press **Adjust photo** or **Adjust signature** under it, drag the box and press **Use this**. **Show only problems** hides the students that need nothing.
+5. Press **Download ZIP**. It holds `photos/`, `signs/`, `names/` and `students.csv`.
+
+Each student shows the size of their two files. A file that cannot be brought under the limit in Settings is marked "too big", because the portal would reject it: raise the limit or choose a smaller size.
 
 ### Settings
 

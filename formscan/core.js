@@ -411,10 +411,11 @@
       const { rect, notes } = findPhoto(C, f, yTop, yBot);
       if (!rect || rect[2] - rect[0] < 1.3 * f[2] || rect[3] - rect[1] < 1.5 * f[3]) flags.push('photo crop doubtful');
       if (notes.length >= 2) flags.push('photo edges unclear');
-      if (!rect || rect[2] - rect[0] <= 20 || rect[3] - rect[1] <= 20) return { photo: null, notes };
+      if (!rect || rect[2] - rect[0] <= 20 || rect[3] - rect[1] <= 20) return { photo: null, crop: null, notes };
       const F = C.full, q = frameToAspect(rect, f, opts.photo[0] / opts.photo[1]).map(v => v / C.k);
-      const crop = cropRGBA(F, Math.max(Math.round(q[0]), 0), Math.max(Math.round(q[1]), 0), Math.min(Math.round(q[2]), F.w), Math.min(Math.round(q[3]), F.h));
-      return { photo: resizeRGBA(crop, opts.photo[0], opts.photo[1]), notes };
+      const at = [Math.max(Math.round(q[0]), 0), Math.max(Math.round(q[1]), 0), Math.min(Math.round(q[2]), F.w), Math.min(Math.round(q[3]), F.h)];
+      // `crop` is where the photo sits in the region, so the page can offer to adjust it
+      return { photo: resizeRGBA(cropRGBA(F, ...at), opts.photo[0], opts.photo[1]), crop: at, notes };
     }
 
     const CELL = 700, FACE = 135;       // cell width / face width the pixel sizes above were tuned for
@@ -432,7 +433,8 @@
           const inside = faces.filter(f => { const x = f[0] + f[2] / 2, y = f[1] + f[3] / 2; return x > cx0 && x < cx1 && y > cy0 && y < cy1; });
           if (!inside.length && !sig) return;                                     // empty cell
           const big = inside.sort((a, b) => b[2] * b[3] - a[2] * a[3])[0];
-          const flags = [], st = { sr: r * xs.length + c + 1, photo: null, sign: null, flags, notes: [] };
+          const flags = [], st = { sr: r * xs.length + c + 1, photo: null, sign: null, crop: null, flags, notes: [] };
+          st.cell = { data: new Uint8ClampedArray(C.full.px), w: C.full.w, h: C.full.h };     // the whole cell, for adjusting a crop by hand
 
           const sh0 = Math.trunc(h * 0.005), sh1 = Math.trunc(h * 0.2);
           st.name = cropRGBA(C, 6, sh0, w - 6, sh1);
@@ -498,7 +500,8 @@
         const x1 = Math.min(Math.round(fx + 3.1 * fw), work.cols), y1 = Math.min(Math.round(fy + 4.2 * fh), work.rows);
         const C = regionPixels(work, x0, y0, x1 - x0, y1 - y0, FACE / fw), flags = [];
         const f = [(fx - x0) * C.k, (fy - y0) * C.k, fw * C.k, fh * C.k].map(Math.round);
-        const st = { sr: i + 1, sign: null, name: null, hand: null, nameWritten: false, flags, ...cutPhoto(C, f, 0, C.h, opts, flags) };
+        const st = { sr: i + 1, sign: null, name: null, hand: null, nameWritten: false, flags, ...cutPhoto(C, f, 0, C.h, opts, flags),
+                     cell: { data: new Uint8ClampedArray(C.full.px), w: C.full.w, h: C.full.h } };
         if (st.photo) students.push(st);
       });
       return { students, layout: 'photos' };

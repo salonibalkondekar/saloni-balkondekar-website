@@ -46,6 +46,10 @@
   #rows { max-width: 1180px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
   .tile { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; grid-template-columns: 84px 1fr; gap: 10px 12px; align-content: start; }
   .tile.flag { border-color: #e2b65a; }
+  body.only .tile:not(.flag) { display: none; }
+  #only[aria-pressed=true] { color: var(--ink); background: var(--warn-bg); }
+  .tile img.photo, .tile div.photo, .tile img.sign { cursor: pointer; }
+  .tile .fix { align-self: flex-start; padding: 0; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
   .photo { width: 84px; aspect-ratio: 7 / 9; object-fit: cover; border-radius: 4px; background: #eeede8; display: block; }
   .side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .sign { width: 100%; aspect-ratio: 3 / 1; object-fit: contain; border: 1px solid #eceae4; border-radius: 4px; background: #fff; display: block; }
@@ -68,6 +72,12 @@
   .row small { color: var(--mute); }
   dialog textarea { width: 100%; resize: vertical; padding: 10px; }
   .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+  /* adjusting a crop: the cell it came from, with a box to drag */
+  #stage { position: relative; overflow: hidden; margin: 0 auto 14px; width: fit-content; border-radius: 6px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #stage img { display: block; max-width: 100%; max-height: 52vh; }
+  #cropbox { position: absolute; border: 2px solid #fff; box-shadow: 0 0 0 9999px rgba(20, 20, 18, .5); cursor: move; }
+  #adjSize { width: 100%; accent-color: var(--accent); }
 </style>
 </head>
 <body data-state="start">
@@ -114,6 +124,7 @@
     <span id="sum"></span>
     <button class="quiet" id="reset">Start over</button>
     <button class="quiet" id="more">Add sheets</button>
+    <button class="quiet" id="only" aria-pressed="false" hidden>Show only problems</button>
     <button class="quiet" data-open="settings">Settings</button>
     <button data-open="listbox" id="listBtn">Add class list</button>
     <button id="zip" class="primary">Download ZIP</button>
@@ -146,6 +157,14 @@
   <div class="row"><span>File names</span><select id="naming"><option value="id">001, 002, 003…</option><option value="name">Student name</option></select></div>
   <div class="row"><span>Names</span><label><input id="read" type="checkbox" checked> Read handwritten names (Marathi)</label></div>
   <div class="actions"><button class="primary" data-close>Done</button></div>
+</dialog>
+
+<dialog id="adjust">
+  <h2 id="adjTitle">Adjust photo</h2>
+  <p>Drag the box to where it should be. Use the slider to make it bigger or smaller.</p>
+  <div id="stage"><img id="adjImg" alt="" draggable="false"><div id="cropbox"></div></div>
+  <input id="adjSize" type="range" min="15" max="100" aria-label="Size of the box">
+  <div class="actions"><button class="quiet" data-close>Cancel</button><button class="primary" id="adjApply">Use this</button></div>
 </dialog>
 
 <dialog id="listbox">

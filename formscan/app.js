@@ -184,7 +184,18 @@ function applyNames() {
   summarise();
 }
 const BADGE = { 'name not written on form': 'No name on sheet', 'signature not found': 'No signature found', 'photo not found': 'No photo found',
-                'photo crop doubtful': 'Check photo', 'photo edges unclear': 'Check photo' };
+                'photo crop doubtful': 'Check photo', 'photo edges unclear': 'Check photo',
+                'photo file over the size limit': 'Photo file too big', 'signature file over the size limit': 'Signature file too big' };
+/* A file the encoder could not get under the limit would be turned away by the portal, so say so. */
+function checkSizes(s) {
+  const limit = { photo: Math.max(1, parseInt($('pkb').value, 10) || 1), sign: Math.max(1, parseInt($('skb').value, 10) || 1) };
+  for (const [kind, flag] of [['photo', 'photo file over the size limit'], ['sign', 'signature file over the size limit']]) {
+    s.flags = s.flags.filter(f => f !== flag);
+    if (s[kind] && s[kind].size > limit[kind] * 1000) s.flags.push(flag);
+  }
+  const kb = b => b ? Math.max(1, Math.round(b.size / 1000)) + ' KB' : 'none';
+  s.el.num.textContent = `${s.id} · page ${s.page} · photo ${kb(s.photo)}, signature ${kb(s.sign)}`;
+}
 function paint(s) {
   const unsure = s.status === 'check' || s.status === 'draft';
   const badges = [...new Set(s.flags.map(f => BADGE[f] || f))];
@@ -192,7 +203,8 @@ function paint(s) {
   if (document.activeElement !== s.el.name) s.el.name.value = s.fields.name;
   s.el.name.classList.toggle('unsure', unsure);
   s.el.badges.replaceChildren(...badges.map(b => Object.assign(document.createElement('span'), { className: 'badge', textContent: b })));
-  s.flagged = badges.length > 0;
+  s.flagged = s.flags.length > 0;            // something wrong with the files; a name to confirm is counted on its own
+  s.unsure = unsure;
   s.el.tile.classList.toggle('flag', s.flagged);
 }
 
@@ -210,22 +222,109 @@ function addStudent(s) {
   const commit = () => { s.fields.name = name.value.trim(); s.status = 'typed'; s.listRow = list.findIndex(l => l.name === s.fields.name); save('s:' + s.key, s.fields); paint(s); summarise(); };
   name.addEventListener('input', commit);
   name.addEventListener('keydown', e => { if (e.key === 'Enter' && name.value.trim()) { commit(); name.blur(); } });   // Enter accepts a suggestion as it stands
-  if (s.sign) side.append(img(s.sign, 'sign'));
-  side.append(Object.assign(el('span', 'num'), { textContent: `${s.id} · page ${s.page}` }), badges);
+  const num = el('span', 'num'), fix = kind => Object.assign(el('button', 'quiet fix'), { type: 'button', textContent: kind === 'photo' ? 'Adjust photo' : s.sign ? 'Adjust signature' : 'Add signature', onclick: () => adjust(s, kind) });
+  const signImg = s.sign ? img(s.sign, 'sign') : null;
+  if (signImg) { signImg.onclick = () => adjust(s, 'sign'); side.append(signImg); }
+  side.append(num, badges);
+  if (s.cell) side.append(fix('photo'), ...(s.name !== null ? [fix('sign')] : []));
   if (s.name) namebox.append(img(s.name, 'strip'));
   namebox.append(name);
-  tile.append(s.photo ? img(s.photo, 'photo') : el('div', 'photo'), side, namebox);
-  s.el = { tile, name, badges };
+  const photoEl = s.photo ? img(s.photo, 'photo') : el('div', 'photo');
+  if (s.cell) photoEl.onclick = () => adjust(s, 'photo');
+  tile.append(photoEl, side, namebox);
+  s.el = { tile, name, badges, num, photo: photoEl, sign: signImg, side };
+  checkSizes(s);
   paint(s);
+  const kept = saved('c:' + s.key);          // crops fixed by hand earlier, on this computer
+  if (kept && s.cell) for (const kind of ['photo', 'sign']) if (kept[kind]) recrop(s, kind, kept[kind]);
   $('rows').appendChild(tile);
   if (s.hand && $('read').checked && s.status !== 'typed') queueReading(s);
 }
 function summarise() {
-  const flagged = students.filter(s => s.flagged).length, n = students.length;
-  const note = namesLeft ? ['busy', 'reading names…'] : flagged ? ['', `${flagged} to check`] : null;
+  const flagged = students.filter(s => s.flagged).length, unsure = students.filter(s => s.unsure).length, n = students.length;
+  const parts = [flagged && `${flagged} with a problem`, unsure && `${unsure} ${unsure === 1 ? 'name' : 'names'} to confirm`].filter(Boolean);
+  const note = namesLeft ? ['busy', 'reading names…'] : parts.length ? ['', parts.join(' · ')] : null;
+  $('only').hidden = !flagged;
+  if (!flagged) showOnly(false);
   $('sum').replaceChildren(`${n} ${n === 1 ? 'student' : 'students'} found`, ...(note ? [Object.assign(document.createElement('small'), { className: note[0], textContent: note[1] })] : []));
   $('zip').disabled = busy;
 }
+
+// ---- only the problems ----
+function showOnly(on) { document.body.classList.toggle('only', on); $('only').setAttribute('aria-pressed', on); $('only').textContent = on ? 'Show everyone' : 'Show only problems'; }
+$('only').addEventListener('click', () => showOnly(!document.body.classList.contains('only')));
+
+// ---- adjusting a crop by hand ----
+const CLEARS = { photo: ['photo crop doubtful', 'photo edges unclear', 'photo not found'], sign: ['signature not found'] };
+const outSize = kind => (kind === 'photo' ? ['pw', 'ph', 'pkb'] : ['sw', 'sh', 'skb']).map(id => Math.max(1, parseInt($(id).value, 10) || 1));
+/* Cut [x, y, w, h] out of the student's cell and make it the photo or signature, at the highest quality that fits the limit. */
+async function recrop(s, kind, [x, y, w]) {
+  const [ow, oh, kb] = outSize(kind), h = w * oh / ow, bmp = await createImageBitmap(s.cell), canvas = document.createElement('canvas');
+  canvas.width = ow; canvas.height = oh;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, ow, oh);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, x, y, w, h, 0, 0, ow, oh);
+  bmp.close();
+  let blob;
+  for (let q = 0.95; q > 0.15; q -= 0.05) {
+    blob = await new Promise(done => canvas.toBlob(done, 'image/jpeg', q));
+    if (blob.size <= kb * 1000) break;
+  }
+  s[kind] = blob;
+  s.flags = s.flags.filter(f => !CLEARS[kind].includes(f));
+  let shown = s.el[kind];
+  if (!shown || shown.tagName !== 'IMG') {       // there was no picture before: put one where it belongs
+    const fresh = Object.assign(new Image(), { className: kind, alt: '', onclick: () => adjust(s, kind) });
+    if (shown) shown.replaceWith(fresh); else s.el.side.prepend(fresh);
+    shown = s.el[kind] = fresh;
+    for (const b of s.el.side.querySelectorAll('.fix')) if (b.textContent === 'Add signature') b.textContent = 'Adjust signature';
+  }
+  shown.src = URL.createObjectURL(blob);
+  checkSizes(s);
+  paint(s);
+  summarise();
+}
+let adjusting = null;          // { s, kind, W, H, aspect, x, y, w } in the cell picture's own pixels
+function placeBox() {
+  const a = adjusting, k = $('adjImg').clientWidth / a.W, h = a.w / a.aspect;
+  a.x = Math.min(Math.max(0, a.x), a.W - a.w); a.y = Math.min(Math.max(0, a.y), a.H - h);
+  Object.assign($('cropbox').style, { left: a.x * k + 'px', top: a.y * k + 'px', width: a.w * k + 'px', height: h * k + 'px' });
+}
+async function adjust(s, kind) {
+  const [ow, oh] = outSize(kind), aspect = ow / oh, picture = $('adjImg');
+  picture.src = URL.createObjectURL(s.cell);
+  await picture.decode();
+  const W = picture.naturalWidth, H = picture.naturalHeight, widest = Math.min(W, H * aspect);
+  const kept = (saved('c:' + s.key) || {})[kind];
+  // start from the last hand-made crop, else what was found, else a sensible guess: the middle for a photo, the bottom for a signature
+  let [x, y, w] = kept || (kind === 'photo' && s.crop ? [s.crop[0], s.crop[1], s.crop[2] - s.crop[0]] : null) || [0, 0, 0];
+  if (!w) { w = widest * (kind === 'photo' ? 0.45 : 0.85); x = (W - w) / 2; y = kind === 'photo' ? (H - w / aspect) * 0.45 : H * 0.97 - w / aspect; }
+  w = Math.min(w, widest);
+  adjusting = { s, kind, W, H, aspect, x, y, w, widest };
+  $('adjTitle').textContent = kind === 'photo' ? 'Adjust photo' : 'Adjust signature';
+  $('adjSize').value = Math.round(w / widest * 100);
+  $('adjust').showModal();
+  placeBox();
+}
+$('adjSize').addEventListener('input', () => {
+  const a = adjusting, w = a.widest * $('adjSize').value / 100, cx = a.x + a.w / 2, cy = a.y + a.w / a.aspect / 2;
+  a.w = w; a.x = cx - w / 2; a.y = cy - w / a.aspect / 2;        // grow and shrink around the middle of the box
+  placeBox();
+});
+$('cropbox').addEventListener('pointerdown', e => {
+  const a = adjusting, k = a.W / $('adjImg').clientWidth, from = { px: e.clientX, py: e.clientY, x: a.x, y: a.y };
+  $('cropbox').setPointerCapture(e.pointerId);
+  const move = m => { a.x = from.x + (m.clientX - from.px) * k; a.y = from.y + (m.clientY - from.py) * k; placeBox(); };
+  $('cropbox').addEventListener('pointermove', move);
+  $('cropbox').addEventListener('pointerup', () => $('cropbox').removeEventListener('pointermove', move), { once: true });
+});
+$('adjApply').addEventListener('click', async () => {
+  const a = adjusting, box = [a.x, a.y, a.w, a.w / a.aspect].map(Math.round);
+  save('c:' + a.s.key, { ...saved('c:' + a.s.key), [a.kind]: box });
+  $('adjust').close();
+  await recrop(a.s, a.kind, box);
+});
 
 // ---- download ----
 function fileKeys() {
@@ -268,7 +367,7 @@ $('reset').addEventListener('click', () => {
     setTimeout(() => { delete b.dataset.armed; b.textContent = 'Start over'; }, 4000);
     return;
   }
-  for (const k of Object.keys(localStorage)) if (k.startsWith(STORE + 's:') || k === STORE + 'list') localStorage.removeItem(k);
+  for (const k of Object.keys(localStorage)) if (k.startsWith(STORE + 's:') || k.startsWith(STORE + 'c:') || k === STORE + 'list') localStorage.removeItem(k);
   location.reload();
 });
 

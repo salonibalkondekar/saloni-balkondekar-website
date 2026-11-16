@@ -45,6 +45,7 @@ onmessage = async ({ data: { id, rgba, width, height, opts } }) => {
       photo: s.photo && await jpeg(s.photo, opts.photoKB * 1000),
       sign: s.sign && await jpeg(s.sign, opts.signKB * 1000),
       name: s.name && await jpeg(s.name, 60000),
+      cell: s.cell && await jpeg(s.cell, 400000), crop: s.crop,
       hand: s.hand && s.nameWritten ? await handPng(s.hand) : null,
     });
     postMessage({ type: 'page', id, students: out, layout, ms: Math.round(performance.now() - t0), scanMs });
