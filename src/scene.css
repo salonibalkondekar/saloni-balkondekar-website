@@ -3,6 +3,11 @@
 .crate { transition: fill 0.25s ease; }
 .crate:hover { filter: brightness(1.12); }
 
+/* Paper grain: scene.js paints the painting's two noise layers once into this canvas and switches the
+   copies inside the SVG off. No blend mode here: a blended layer over a moving picture is what stuttered. */
+.scene { position: relative; }
+.scene > canvas.grain { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
+
 /* wind: hover the painting and the clouds drift while the plants lean into gusts */
 @property --painting-wind { syntax: "<number>"; inherits: true; initial-value: 0; }
 @property --painting-gust { syntax: "<number>"; inherits: false; initial-value: 0; }
