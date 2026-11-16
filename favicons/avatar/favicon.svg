@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 2 56 56">
+  <!-- illustrated avatar in the painting's colours -->
+  <path d="M10 30C10 14 20 5 32 5s22 9 22 25c0 9-2 17-5 22H15c-3-5-5-13-5-22z" fill="#33262a"/>
+  <path d="M8 64c1-10 9-14 24-14s23 4 24 14z" fill="#f3b72f"/>
+  <path d="M25 46h14v7c-2 3-12 3-14 0z" fill="#c2815a"/>
+  <path d="M26 53.5c3 2.6 9 2.6 12 0" fill="none" stroke="#e3292e" stroke-width="1.6" stroke-linecap="round"/>
+  <ellipse cx="32" cy="33" rx="15.5" ry="17" fill="#d99b6f"/>
+  <path d="M15.5 31C15 17 24 11 33 11c9 0 16 6 15.6 20-3-7-8-12-15-14-3 6-10 9-18.100 14z" fill="#33262a"/>
+  <g fill="#f3b72f"><circle cx="15.800" cy="40" r="1.700"/><path d="M12.300 47a3.500 3.800 0 0 1 7 0z"/><circle cx="48.200" cy="40" r="1.700"/><path d="M44.700 47a3.500 3.800 0 0 1 7 0z"/></g>
+  <g fill="#e3292e"><circle cx="13.500" cy="48.300" r="1"/><circle cx="15.800" cy="48.800" r="1"/><circle cx="18.100" cy="48.300" r="1"/><circle cx="45.900" cy="48.300" r="1"/><circle cx="48.200" cy="48.800" r="1"/><circle cx="50.500" cy="48.300" r="1"/></g>
+  <g fill="#fb8ca5" opacity=".55"><circle cx="22.500" cy="39.500" r="3.400"/><circle cx="41.500" cy="39.500" r="3.400"/></g>
+  <g fill="#33262a"><circle cx="25.800" cy="34" r="2.100"/><circle cx="38.200" cy="34" r="2.100"/></g>
+  <path d="M22.500 29.600q3.300-2 6.600-.6M35 29q3.300-1.400 6.600.6" fill="none" stroke="#33262a" stroke-width="1.300" stroke-linecap="round"/>
+  <path d="M27.500 41.500q4.500 4 9 0" fill="none" stroke="#7a2f2a" stroke-width="1.700" stroke-linecap="round"/>
+</svg>

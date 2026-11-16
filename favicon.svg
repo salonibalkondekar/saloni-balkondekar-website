@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- an S drawn as a route between two nodes -->
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <path d="M44 19.500C41 11.500 19.500 12 19.500 23.500C19.500 34 44.500 30 44.500 41C44.500 52 23 52.500 20 44.500" fill="none" stroke="#fbf7ee" stroke-width="6.500" stroke-linecap="round"/>
+  <circle cx="44" cy="19.500" r="5.300" fill="#f3b72f"/>
+  <circle cx="20" cy="44.500" r="5.300" fill="#fb8ca5"/>
+</svg>
