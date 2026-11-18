@@ -35,6 +35,7 @@
 
   #working progress { width: min(360px, 80vw); height: 10px; accent-color: var(--accent); margin-top: 22px; }
   #working p { font-size: 20px; margin: 0; }
+  #working #progressNote { font-size: 15px; color: var(--mute); margin-top: 16px; min-height: 3em; overflow-wrap: anywhere; }
 
   header { position: sticky; top: 0; z-index: 5; background: #fff; border-bottom: 1px solid var(--line); }
   header div { max-width: 1180px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -49,7 +50,8 @@
   body.only .tile:not(.flag) { display: none; }
   #only[aria-pressed=true] { color: var(--ink); background: var(--warn-bg); }
   .tile img.photo, .tile div.photo, .tile img.sign { cursor: pointer; }
-  .tile .fix { align-self: flex-start; padding: 0; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
+  .tile .links { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+  .tile .fix { padding: 0; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
   .photo { width: 84px; aspect-ratio: 7 / 9; object-fit: cover; border-radius: 4px; background: #eeede8; display: block; }
   .side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .sign { width: 100%; aspect-ratio: 3 / 1; object-fit: contain; border: 1px solid #eceae4; border-radius: 4px; background: #fff; display: block; }
@@ -57,9 +59,7 @@
   .badges { display: flex; flex-wrap: wrap; gap: 4px; }
   .badge { background: var(--warn-bg); color: var(--warn); font-size: 12px; padding: 1px 7px; border-radius: 20px; white-space: nowrap; }
   .namebox { grid-column: 1 / -1; }
-  .strip { width: 100%; display: block; border-radius: 4px; margin-bottom: 6px; }
-  .namebox input { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; background: #fff; }
-  .namebox input.unsure { border-color: #e2b65a; background: #fffaf0; }
+  .strip { width: 100%; display: block; border-radius: 4px; }
 
   dialog { border: 0; border-radius: 14px; padding: 26px; width: min(560px, 92vw); box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
   dialog::backdrop { background: rgba(20, 20, 18, .45); }
@@ -68,9 +68,8 @@
   .row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 11px 0; border-top: 1px solid #eceae4; font-size: 15px; }
   .row > span:first-child { flex: 0 0 132px; font-weight: 600; }
   .row input[type=number] { width: 68px; }
-  .row input, .row select, dialog textarea { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: #fff; }
+  .row input, .row select { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: #fff; }
   .row small { color: var(--mute); }
-  dialog textarea { width: 100%; resize: vertical; padding: 10px; }
   .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
   /* adjusting a crop: the cell it came from, with a box to drag */
@@ -117,6 +116,7 @@
 <section id="working">
   <p id="progressText">Getting ready…</p>
   <progress id="progress" max="1" value="0"></progress>
+  <p id="progressNote"></p>
 </section>
 
 <section id="done">
@@ -126,7 +126,6 @@
     <button class="quiet" id="more">Add sheets</button>
     <button class="quiet" id="only" aria-pressed="false" hidden>Show only problems</button>
     <button class="quiet" data-open="settings">Settings</button>
-    <button data-open="listbox" id="listBtn">Add class list</button>
     <button id="zip" class="primary">Download ZIP</button>
   </div></header>
   <p id="doneErr" hidden></p>
@@ -154,8 +153,6 @@
     </select>
     <span id="manual" hidden><input id="grows" type="number" value="3" min="1" max="10"> rows × <input id="gcols" type="number" value="3" min="1" max="10"> columns</span>
   </div>
-  <div class="row"><span>File names</span><select id="naming"><option value="id">001, 002, 003…</option><option value="name">Student name</option></select></div>
-  <div class="row"><span>Names</span><label><input id="read" type="checkbox" checked> Read handwritten names (Marathi)</label></div>
   <div class="actions"><button class="primary" data-close>Done</button></div>
 </dialog>
 
@@ -166,14 +163,6 @@
   <input id="adjSize" type="range" min="15" max="100" aria-label="Size of the box">
   <div class="actions"><button class="quiet" data-close>Cancel</button><button class="primary" id="adjApply">Use this</button></div>
 </dialog>
-
-<dialog id="listbox">
-  <h2>Class list</h2>
-  <p>Paste your class list, one student per line. Names fill in by themselves, and any other columns (roll number, English name) go into the spreadsheet.</p>
-  <textarea id="list" rows="10" spellcheck="false" placeholder="कंठे प्रतिक्षा साईनाथ&#10;गायकवाड श्रद्धा राजाराम"></textarea>
-  <div class="actions"><button class="primary" data-close>Done</button></div>
-</dialog>
-<datalist id="names"></datalist>
 
 <script type="module" src="app.js"></script>
 </body>

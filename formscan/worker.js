@@ -24,16 +24,6 @@ async function jpeg(im, maxBytes) {
   return blob;
 }
 
-/* Handwriting at double size as PNG, the input the name reader works best on. */
-async function handPng(im) {
-  const src = new OffscreenCanvas(im.w, im.h), big = new OffscreenCanvas(im.w * 2, im.h * 2);
-  src.getContext('2d').putImageData(new ImageData(im.data, im.w, im.h), 0, 0);
-  const ctx = big.getContext('2d');
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(src, 0, 0, big.width, big.height);
-  return big.convertToBlob({ type: 'image/png' });
-}
-
 onmessage = async ({ data: { id, rgba, width, height, opts } }) => {
   try {
     const scanner = await ready, t0 = performance.now();
@@ -46,7 +36,6 @@ onmessage = async ({ data: { id, rgba, width, height, opts } }) => {
       sign: s.sign && await jpeg(s.sign, opts.signKB * 1000),
       name: s.name && await jpeg(s.name, 60000),
       cell: s.cell && await jpeg(s.cell, 400000), crop: s.crop,
-      hand: s.hand && s.nameWritten ? await handPng(s.hand) : null,
     });
     postMessage({ type: 'page', id, students: out, layout, ms: Math.round(performance.now() - t0), scanMs });
   } catch (e) {

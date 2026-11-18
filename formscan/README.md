@@ -2,15 +2,16 @@
 
 Form Scan cuts each student's photo and signature out of a scanned candidate sheet and saves them as separate, correctly sized files. It was built for the Maharashtra board's "Form to Scan Photograph and Signature of Candidates" sheet, used when filling Class 10 and 12 exam forms.
 
-It is a static website. All processing happens in the visitor's browser; scans, photos and names are never uploaded.
+It is a static website. All processing happens in the visitor's browser; scans and photos are never uploaded.
 
 ## Use it
 
 1. Open the page and select a scanned PDF, JPG or PNG (or drop it anywhere on the page).
-2. Look over the results: each student has a photo, a signature and a name. Anything marked in amber needs a look.
-3. Fix or type names where needed.
-4. If a photo or signature is cut wrongly, press **Adjust photo** or **Adjust signature** under it, drag the box and press **Use this**. **Show only problems** hides the students that need nothing.
-5. Press **Download ZIP**. It holds `photos/`, `signs/`, `names/` and `students.csv`.
+2. Look over the results: each student has a photo, a signature and a picture of the name as written on the sheet, so you can tell who is who. Anything marked in amber needs a look.
+3. If a photo or signature is cut wrongly, press **Adjust photo** or **Adjust signature** under it, drag the box and press **Use this**. **Show only problems** hides the students that need nothing.
+4. Press **Download ZIP**. It holds `photos/`, `signs/`, `names/` (the name pictures), `students.csv` and `index.html`. Files are numbered 001, 002, 003… in sheet order; open `index.html` to see, or print, which number belongs to which student. **Save photo** and **Save signature** under a student download just that one file.
+
+The page does not read the handwritten names: the reader we tried got Marathi handwriting wrong too often to be useful.
 
 Each student shows the size of their two files. A file that cannot be brought under the limit in Settings is marked "too big", because the portal would reject it: raise the limit or choose a smaller size.
 
@@ -23,17 +24,6 @@ Changing a setting re-runs the sheets already loaded.
   - *Find the grid automatically* reads the ruled lines, so sheets with other row and column counts work without setup.
   - *I'll set rows and columns* is for sheets whose lines are too faint to read.
   - *No grid, just find photos* finds every passport photo on any scan. It does not look for signatures or names.
-- **File names.** Number the files or name them after the student.
-
-### Class list
-
-Press **Add class list** and paste the list, one student per line. Each handwritten name is matched to a name on the list. Other columns on the line, such as roll number or English name, are copied into the spreadsheet.
-
-### What to expect from name reading
-
-Names are read with Tesseract's Marathi model, which is trained on print. On the handwriting we tested it got about 60% of characters right, so a reading on its own is a draft to correct.
-
-With a class list it does much better. On a 36-student test, 29 of 34 written names were matched correctly, 1 was matched wrongly and marked for checking, and 4 were left blank. Every match the page did not mark for checking was correct. Always compare the name with the strip above it.
 
 ## Run it locally
 
@@ -47,7 +37,7 @@ Opening `index.html` directly from disk does not work, because browsers block th
 
 ## Publish it
 
-Upload this folder as it is to any static host (Cloudflare Pages, GitHub Pages, Netlify). There is no build step and no server code. Turn on compression if the host offers it: the first visit downloads about 18 MB (OpenCV, the PDF reader and the name reader), and much less when compressed.
+Upload this folder as it is to any static host (Cloudflare Pages, GitHub Pages, Netlify). There is no build step and no server code. Turn on compression if the host offers it: the first visit downloads about 12 MB (OpenCV and the PDF reader), and much less when compressed.
 
 ## Adapt it to another form
 
@@ -62,8 +52,6 @@ For a different layout, the places to change are in `core.js`:
 | Photo edge rules | `findPhoto` |
 | Fallback grid when lines cannot be read | `ROWS`, `COLS`, `HEADER` |
 
-To read names in another language, replace `vendor/tesseract/mar.traineddata.gz` with that language's file and change `'mar'` in `names.js`.
-
 ## Files
 
 | File | Purpose |
@@ -71,10 +59,9 @@ To read names in another language, replace `vendor/tesseract/mar.traineddata.gz`
 | `index.html`, `app.js` | The page: file input, options, results table, downloads |
 | `core.js` | Image processing: straightens the sheet, finds the grid, faces, photos and signatures |
 | `worker.js` | Runs `core.js` in the background and encodes the JPEGs |
-| `names.js` | Name reading and class-list matching |
 | `zip.js` | Builds the ZIP |
 | `yunet.onnx` | Face detection model |
-| `vendor/` | OpenCV.js, pdf.js, tesseract.js and the Marathi language data |
+| `vendor/` | OpenCV.js and pdf.js |
 
 ## Test it
 
@@ -88,8 +75,8 @@ This opens the page in headless Chrome, processes the file and prints a summary.
 
 - Tested on one school's four-page scan and on test pages cut from it. Other scanners, lighting and handwriting may behave differently.
 - An overexposed scan gives washed-out photos. Rescan at lower brightness.
-- Typed names are saved in the browser on that computer until "Start over" is pressed. On a shared computer, press it when finished.
+- Crops adjusted by hand are remembered in the browser on that computer until "Start over" is pressed.
 
 ## Credits
 
-OpenCV.js, pdf.js and tesseract.js (Apache 2.0), Tesseract language data (Apache 2.0), YuNet face detector from the OpenCV Zoo (MIT).
+OpenCV.js and pdf.js (Apache 2.0), YuNet face detector from the OpenCV Zoo (MIT).

@@ -353,6 +353,43 @@
         else if (alienRow(b - 1, -10, l, r)) lim.b--;
         else break;
       }
+      // what is left can still end in the print's own white border with the photo's shadow line outside it,
+      // which the test above misses when the picture is as dark as the shadow: cut at the innermost light band
+      // near each edge that has something else just inside it
+      const light = (x, y) => { const i = (y * w + x) * 4; return Math.min(px[i], px[i + 1], px[i + 2]) > 170 && Math.max(px[i], px[i + 1], px[i + 2]) > 225; };
+      /* at(k, depth) -> [x, y] of the pixel `depth` in from position k along the edge; returns how much to shave */
+      const band = (n, cap, at) => {
+        for (let d = cap - 1; d >= 0; d--) {
+          let s = 0;
+          for (let k = 0; k < n; k++) { const [xa, ya] = at(k, d), [xb, yb] = at(k, d + 6); if (light(xa, ya) && differs(xa, ya, xb, yb)) s++; }
+          if (s >= 0.5 * n) return d + 2;
+        }
+        return 0;
+      };
+      {
+        const { l, t: t_, r, b } = lim, capX = Math.round(0.05 * (r - l)), capY = Math.round(0.05 * (b - t_));
+        if (r - l > 120 && b - t_ > 120) {
+          lim.l += band(b - t_, capX, (k, d) => [l + d, t_ + k]);
+          lim.r -= band(b - t_, capX, (k, d) => [r - 1 - d, t_ + k]);
+          lim.t += band(r - l, capY, (k, d) => [l + k, t_ + d]);
+          lim.b -= band(r - l, capY, (k, d) => [l + k, b - 1 - d]);
+          // a photo pasted at a slight tilt leaves a wedge of white sheet running in from a corner, with the
+          // picture close behind it; white with more white behind it is a white background and is left alone
+          const paper = (x, y) => { const i = (y * w + x) * 4; return Math.min(px[i], px[i + 1], px[i + 2]) > 235; };
+          const wedge = (n, skip, deep, at) => [k => k, k => n - 1 - k].some(pos => {
+            let run = 0;
+            for (let k = skip; k < n && paper(...at(pos(k), 0)) && !paper(...at(pos(k), deep)); k++) run++;
+            return run >= 0.1 * n;
+          });
+          for (let i = 0; i < capX && wedge(lim.b - lim.t, capY, capX + 2, (k, d) => [lim.l + d, lim.t + k]); i++) lim.l++;
+          for (let i = 0; i < capX && wedge(lim.b - lim.t, capY, capX + 2, (k, d) => [lim.r - 1 - d, lim.t + k]); i++) lim.r--;
+          for (let i = 0; i < capY && wedge(lim.r - lim.l, capX, capY + 2, (k, d) => [lim.l + k, lim.t + d]); i++) lim.t++;
+          for (let i = 0; i < capY && wedge(lim.r - lim.l, capX, capY + 2, (k, d) => [lim.l + k, lim.b - 1 - d]); i++) lim.b--;
+        }
+      }
+      // and a hair inside every edge, so a last sliver of sheet or border never reaches the file
+      const ins = Math.round(0.02 * (lim.r - lim.l));
+      if (lim.r - lim.l > 120 && lim.b - lim.t > 120) { lim.l += ins; lim.r -= ins; lim.t += ins; lim.b -= ins; }
       return { rect: [lim.l, lim.t, lim.r, lim.b], notes };
     }
 
