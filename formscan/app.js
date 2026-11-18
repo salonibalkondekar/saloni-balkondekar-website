@@ -5,14 +5,27 @@ import { readName, parseList, matchNames } from './names.js';
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
 const PAGE_WIDTH = 2200;                    // px a page is rendered at before processing
 const STORE = 'formscan:v1:';               // localStorage prefix: options, class list, typed names
+const MAX_FILE_BYTES = 75 * 1024 * 1024;    // keep huge scans from exhausting browser memory
+const MAX_PDF_PAGES = 80;
+const MAX_IMAGE_PIXELS = 50_000_000;
+const MAX_PAGE_PIXELS = 12_000_000;         // about 48 MB of RGBA per rendered page
 const $ = id => document.getElementById(id);
 const students = [], files = [];            // people found, in page order; every file added so far
-let pagesDone = 0, busy = false, list = [], run = 0;
+let pagesDone = 0, busy = false, list = [], run = 0, cancelProcessing = null;
 const setState = s => { document.body.dataset.state = s; };
 
 // ---- settings ----
 const saved = key => { try { return JSON.parse(localStorage.getItem(STORE + key)); } catch { return null; } };
 const save = (key, value) => { try { localStorage.setItem(STORE + key, JSON.stringify(value)); } catch { /* storage full or blocked */ } };
+const userError = message => Object.assign(new Error(message), { userError: true });
+const isPdf = file => file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+const isImage = file => ['image/jpeg', 'image/png'].includes(file.type) || /\.(jpe?g|png)$/i.test(file.name);
+function checkFile(file) {
+  const name = file.name || 'This file';
+  if (file.size > MAX_FILE_BYTES) return `${name} is ${Math.round(file.size / 1048576)} MB; the limit is ${Math.round(MAX_FILE_BYTES / 1048576)} MB. Split it into smaller files.`;
+  if (isPdf(file) || isImage(file)) return '';
+  return `${name} is not a PDF, JPG or PNG.`;
+}
 const SIZE_IDS = ['pw', 'ph', 'pkb', 'sw', 'sh', 'skb'];
 const OPTION_IDS = [...SIZE_IDS, 'preset', 'naming', 'mode', 'grows', 'gcols', 'read'];
 const PRESETS = {             // photo w, h, KB, signature w, h, KB
@@ -57,30 +70,49 @@ $('settings').addEventListener('close', () => {
 $('listbox').addEventListener('close', showOptions);
 $('list').addEventListener('input', () => { save('list', $('list').value); list = parseList($('list').value); applyNames(); });
 
-// ---- image worker ----
-const worker = new Worker('worker.js');
+// ---- image worker: loaded on the first sheet, not on page load ----
+let worker = null, workerReady = null;
 const waiting = new Map();
 let nextId = 1;
-const workerReady = new Promise((resolve, reject) => {
-  worker.addEventListener('message', ({ data }) => {
-    if (data.type === 'ready') resolve();
-    else if (data.type === 'fatal') reject(new Error(data.error));
-    else if (data.type === 'page') { waiting.get(data.id)(data); waiting.delete(data.id); }
+function ensureWorker() {
+  if (workerReady) return workerReady;
+  worker = new Worker(new URL('worker.js', import.meta.url).href);
+  workerReady = new Promise((resolve, reject) => {
+    worker.addEventListener('message', ({ data }) => {
+      if (data.type === 'ready') resolve();
+      else if (data.type === 'fatal') reject(new Error(data.error));
+      else if (data.type === 'page') {
+        const entry = waiting.get(data.id);
+        if (entry) { waiting.delete(data.id); entry.signal?.removeEventListener('abort', entry.onAbort); entry.resolve(data); }
+      }
+    });
+    worker.addEventListener('error', e => reject(new Error(e.message || 'could not start')));
   });
-  worker.addEventListener('error', e => reject(new Error(e.message || 'could not start')));
-});
-function scan(image, opts) {
-  return new Promise(resolve => {
+  return workerReady;
+}
+function scan(image, opts, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new DOMException('Cancelled', 'AbortError')); return; }
     const id = nextId++;
-    waiting.set(id, resolve);
-    worker.postMessage({ id, rgba: image.data.buffer, width: image.width, height: image.height, opts }, [image.data.buffer]);
+    const onAbort = () => { waiting.delete(id); reject(new DOMException('Cancelled', 'AbortError')); };
+    waiting.set(id, { resolve, reject, signal, onAbort });
+    signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      worker.postMessage({ id, rgba: image.data.buffer, width: image.width, height: image.height, opts }, [image.data.buffer]);
+    } catch (e) {
+      waiting.delete(id);
+      signal?.removeEventListener('abort', onAbort);
+      reject(e);
+    }
   });
 }
 
 // ---- reading pages ----
-function toImageData(source, w, h) {
+function toImageData(source, w, h, name = 'This image') {
+  const outH = Math.round(h * PAGE_WIDTH / w);
+  if (PAGE_WIDTH * outH > MAX_PAGE_PIXELS) throw userError(`${name} is too large to process safely. Use a PDF with smaller pages.`);
   const canvas = document.createElement('canvas');
-  canvas.width = PAGE_WIDTH; canvas.height = Math.round(h * PAGE_WIDTH / w);
+  canvas.width = PAGE_WIDTH; canvas.height = outH;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingQuality = 'high';
@@ -88,23 +120,31 @@ function toImageData(source, w, h) {
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 async function* pagesOf(file) {
-  if (!(file.type === 'application/pdf' || /\.pdf$/i.test(file.name))) {
-    const bmp = await createImageBitmap(file);
-    yield { total: 1, image: toImageData(bmp, bmp.width, bmp.height) };
-    bmp.close();
+  if (isPdf(file)) {
+    const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+    try {
+      if (pdf.numPages > MAX_PDF_PAGES) throw userError(`${file.name} has ${pdf.numPages} pages; the limit is ${MAX_PDF_PAGES}. Split it into smaller PDFs.`);
+      for (let n = 1; n <= pdf.numPages; n++) {
+        const page = await pdf.getPage(n);
+        try {
+          const base = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: PAGE_WIDTH / base.width });
+          if (viewport.width * viewport.height > MAX_PAGE_PIXELS) throw userError(`${file.name} page ${n} is too large to process safely. Use a PDF with smaller pages.`);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          yield { total: pdf.numPages, image: ctx.getImageData(0, 0, canvas.width, canvas.height) };
+        } finally { page.cleanup(); }
+      }
+    } finally { pdf.destroy(); }
     return;
   }
-  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const page = await pdf.getPage(n), base = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: PAGE_WIDTH / base.width }), canvas = document.createElement('canvas');
-    canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    yield { total: pdf.numPages, image: ctx.getImageData(0, 0, canvas.width, canvas.height) };
-    page.cleanup();
-  }
-  pdf.destroy();
+  const bmp = await createImageBitmap(file);
+  try {
+    if (bmp.width * bmp.height > MAX_IMAGE_PIXELS) throw userError(`${file.name} is too large to process safely. Use a PDF with smaller pages.`);
+    yield { total: 1, image: toImageData(bmp, bmp.width, bmp.height, file.name) };
+  } finally { bmp.close(); }
 }
 
 // ---- processing ----
@@ -115,39 +155,62 @@ function problem(text) {
 /* Process `batch`; with `fresh`, throw away current results first (settings changed). */
 async function process(batch, fresh) {
   if (busy || !batch.length) return;
+  const accepted = [], problems = [];
+  for (const file of batch) {
+    const issue = checkFile(file);
+    if (issue) problems.push(issue); else accepted.push(file);
+  }
+  if (!accepted.length) { problem(problems.join(' ')); return; }
   busy = true;
   const mine = ++run;
   if (fresh) { students.length = 0; pagesDone = 0; $('rows').replaceChildren(); }
-  else files.push(...batch);
-  const opts = options(), problems = [];
+  else files.push(...accepted);
+  const opts = options();
   problem('');
   setState('working');
-  progress('Getting ready…', 0);
+  progress('Loading image tools…', 0);
+  const cancel = $('cancel'), controller = new AbortController();
+  cancel.hidden = false; cancel.disabled = false;
+  cancelProcessing = () => controller.abort();
+  let cancelled = false;
   try {
-    await workerReady;
-    for (const [f, file] of batch.entries()) {
+    await new Promise((resolve, reject) => {
+      const onAbort = () => reject(new DOMException('Cancelled', 'AbortError'));
+      controller.signal.addEventListener('abort', onAbort, { once: true });
+      ensureWorker().then(resolve, reject).finally(() => controller.signal.removeEventListener('abort', onAbort));
+    });
+    for (const [f, file] of accepted.entries()) {
+      if (controller.signal.aborted) { cancelled = true; break; }
       let n = 0;
       const skipped = [];
       try {
         for await (const { total, image } of pagesOf(file)) {
+          if (controller.signal.aborted) { cancelled = true; break; }
           n++;
-          progress(total > 1 ? `Page ${n} of ${total}` : 'Working on it…', (f + (n - 1) / total) / batch.length);
-          const res = await scan(image, opts), page = ++pagesDone;
+          progress(total > 1 ? `Page ${n} of ${total}` : 'Working on it…', (f + (n - 1) / total) / accepted.length);
+          const res = await scan(image, opts, controller.signal), page = ++pagesDone;
+          if (controller.signal.aborted) { cancelled = true; break; }
           console.debug(`${file.name} p${n}: ${res.ms} ms, layout ${res.layout}`);
           if (res.error) { skipped.push(n); continue; }
           for (const s of res.students) addStudent({ ...s, page, key: `${file.name}:${file.size}:${n}:${s.sr}` });
         }
       } catch (e) {
-        problems.push(`Could not open ${file.name}.`);
+        if (controller.signal.aborted || e.name === 'AbortError') cancelled = true;
+        else problems.push(e.userError ? e.message : `Could not open ${file.name}.`);
       }
+      if (cancelled) break;
       if (skipped.length) problems.push(n === skipped.length
         ? `${file.name} does not look like a candidate sheet. If it is another kind of page with photos, open Settings and choose “No grid, just find photos”.`
         : `${file.name}: page${skipped.length > 1 ? 's' : ''} ${skipped.join(', ')} skipped, no sheet found there.`);
     }
   } catch (e) {
-    problems.push(`Could not start (${e.message || e}). Try reloading the page.`);
+    if (controller.signal.aborted || e.name === 'AbortError') cancelled = true;
+    else problems.push(`Could not start (${e.message || e}). Try reloading the page.`);
+  } finally {
+    busy = false;
+    cancelProcessing = null;
+    cancel.hidden = true;
   }
-  busy = false;
   problem(problems.join(' '));
   setState(students.length ? 'done' : 'start');
   summarise();
@@ -215,21 +278,22 @@ function addStudent(s) {
   s.status = s.fields.name ? 'typed' : ''; s.reading = ''; s.listRow = null;
   students.push(s);
   const el = (tag, cls) => Object.assign(document.createElement(tag), { className: cls || '' });
-  const img = (blob, cls) => Object.assign(new Image(), { className: cls, src: URL.createObjectURL(blob), alt: '' });
+  const img = (blob, cls, alt = '') => Object.assign(new Image(), { className: cls, src: URL.createObjectURL(blob), alt });
   const tile = el('div', 'tile'), side = el('div', 'side'), namebox = el('div', 'namebox'), badges = el('div', 'badges');
   const name = Object.assign(el('input'), { placeholder: 'Student name', autocomplete: 'off', value: s.fields.name });
   name.setAttribute('list', 'names');
+  name.setAttribute('aria-label', `Name for student ${s.id}`);
   const commit = () => { s.fields.name = name.value.trim(); s.status = 'typed'; s.listRow = list.findIndex(l => l.name === s.fields.name); save('s:' + s.key, s.fields); paint(s); summarise(); };
   name.addEventListener('input', commit);
   name.addEventListener('keydown', e => { if (e.key === 'Enter' && name.value.trim()) { commit(); name.blur(); } });   // Enter accepts a suggestion as it stands
   const num = el('span', 'num'), fix = kind => Object.assign(el('button', 'quiet fix'), { type: 'button', textContent: kind === 'photo' ? 'Adjust photo' : s.sign ? 'Adjust signature' : 'Add signature', onclick: () => adjust(s, kind) });
-  const signImg = s.sign ? img(s.sign, 'sign') : null;
+  const signImg = s.sign ? img(s.sign, 'sign', `Signature for student ${s.id}`) : null;
   if (signImg) { signImg.onclick = () => adjust(s, 'sign'); side.append(signImg); }
   side.append(num, badges);
   if (s.cell) side.append(fix('photo'), ...(s.name !== null ? [fix('sign')] : []));
-  if (s.name) namebox.append(img(s.name, 'strip'));
+  if (s.name) namebox.append(img(s.name, 'strip', `Name on sheet for student ${s.id}`));
   namebox.append(name);
-  const photoEl = s.photo ? img(s.photo, 'photo') : el('div', 'photo');
+  const photoEl = s.photo ? img(s.photo, 'photo', `Photo for student ${s.id}`) : el('div', 'photo');
   if (s.cell) photoEl.onclick = () => adjust(s, 'photo');
   tile.append(photoEl, side, namebox);
   s.el = { tile, name, badges, num, photo: photoEl, sign: signImg, side };
@@ -275,7 +339,7 @@ async function recrop(s, kind, [x, y, w]) {
   s.flags = s.flags.filter(f => !CLEARS[kind].includes(f));
   let shown = s.el[kind];
   if (!shown || shown.tagName !== 'IMG') {       // there was no picture before: put one where it belongs
-    const fresh = Object.assign(new Image(), { className: kind, alt: '', onclick: () => adjust(s, kind) });
+    const fresh = Object.assign(new Image(), { className: kind, alt: kind === 'photo' ? `Photo for student ${s.id}` : `Signature for student ${s.id}`, onclick: () => adjust(s, kind) });
     if (shown) shown.replaceWith(fresh); else s.el.side.prepend(fresh);
     shown = s.el[kind] = fresh;
     for (const b of s.el.side.querySelectorAll('.fix')) if (b.textContent === 'Add signature') b.textContent = 'Adjust signature';
@@ -356,9 +420,17 @@ async function buildZip() {
   return new Blob([makeZip(out)], { type: 'application/zip' });
 }
 $('zip').addEventListener('click', async () => {
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await buildZip()), download: 'photos-and-signatures.zip' });
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  $('zip').disabled = true;
+  try {
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await buildZip()), download: 'photos-and-signatures.zip' });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (e) {
+    console.error('zip:', e);
+    problem('Could not create the ZIP file. Please try again.');
+  } finally {
+    $('zip').disabled = busy;
+  }
 });
 $('reset').addEventListener('click', () => {
   const b = $('reset');
@@ -370,6 +442,8 @@ $('reset').addEventListener('click', () => {
   for (const k of Object.keys(localStorage)) if (k.startsWith(STORE + 's:') || k.startsWith(STORE + 'c:') || k === STORE + 'list') localStorage.removeItem(k);
   location.reload();
 });
+
+$('cancel').addEventListener('click', () => cancelProcessing?.());
 
 // ---- input ----
 const picker = $('file');
