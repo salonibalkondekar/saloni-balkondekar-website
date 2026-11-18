@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>Form Scan: cut photos and signatures from scanned exam sheets</title>
 <style>
-  :root { --ink: #1b1b19; --mute: #6c6c66; --line: #dddcd6; --bg: #f7f6f2; --accent: #c8402f; --accent-dark: #a93323; --warn: #9a5b00; --warn-bg: #fff4dc; }
+  :root { --ink: #1b1b19; --mute: #595954; --line: #dddcd6; --bg: #f7f6f2; --accent: #c8402f; --accent-dark: #a93323; --warn: #8a5200; --warn-bg: #fff4dc; }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
@@ -17,6 +17,9 @@
   button.quiet { border-color: transparent; background: none; color: var(--mute); padding: 9px 10px; }
   button.quiet:hover { color: var(--ink); }
   button:disabled { opacity: .5; cursor: default; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  a.back { color: var(--mute); text-decoration: none; padding: 9px 10px; border-radius: 8px; display: inline-flex; align-items: center; }
+  a.back:hover { color: var(--ink); background: #efeeea; }
 
   /* one screen at a time */
   body:not([data-state=start]) #start, body:not([data-state=working]) #working, body:not([data-state=done]) #done { display: none; }
@@ -31,10 +34,16 @@
   figure svg { width: min(560px, 88vw); height: auto; display: block; }
   #startErr { color: var(--accent-dark); margin: 18px 0 0; max-width: 36em; font-size: 15px; }
   #start .quiet { margin-top: 6px; font-size: 14px; }
+  #start .back { margin-top: 10px; font-size: 14px; }
   body.over::after { content: 'Drop the sheet anywhere'; position: fixed; inset: 12px; border: 3px dashed var(--accent); border-radius: 16px; background: rgba(255, 255, 255, .92); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 650; color: var(--accent); z-index: 50; }
 
   #working progress { width: min(360px, 80vw); height: 10px; accent-color: var(--accent); margin-top: 22px; }
   #working p { font-size: 20px; margin: 0; }
+  #working .quiet { margin-top: 18px; }
+  @media (max-width: 720px) {
+    header div { gap: 6px 8px; }
+    header button, header a.back, #start button, #start a.back { min-height: 44px; }
+  }
 
   header { position: sticky; top: 0; z-index: 5; background: #fff; border-bottom: 1px solid var(--line); }
   header div { max-width: 1180px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -87,7 +96,7 @@
   <p class="sub">Upload the scanned sheet. Get each student's photo and signature as separate files, sized for upload.</p>
   <button id="pick" class="primary">Select scanned sheet</button>
   <p class="or">or drop a PDF or image here</p>
-  <p id="startErr" hidden></p>
+  <p id="startErr" hidden role="alert"></p>
   <figure aria-hidden="true">
     <svg viewBox="0 0 560 190" fill="none" stroke="#b9b8b0" stroke-width="2">
       <rect x="20" y="10" width="130" height="170" rx="4" fill="#fff"/>
@@ -111,17 +120,20 @@
   </figure>
   <p class="private">Works in your browser. Your files are not uploaded anywhere.</p>
   <button class="quiet" data-open="settings">Settings</button>
+  <a class="back" href="../">Back to Saloni Balkondekar</a>
   <input id="file" type="file" accept="application/pdf,image/jpeg,image/png" multiple hidden>
 </section>
 
 <section id="working">
-  <p id="progressText">Getting ready…</p>
-  <progress id="progress" max="1" value="0"></progress>
+  <p id="progressText" aria-live="polite">Getting ready…</p>
+  <progress id="progress" max="1" value="0" aria-label="Processing progress"></progress>
+  <button id="cancel" class="quiet" hidden>Cancel</button>
 </section>
 
 <section id="done">
   <header><div>
-    <span id="sum"></span>
+    <span id="sum" role="status" aria-live="polite"></span>
+    <a class="back" href="../">Portfolio</a>
     <button class="quiet" id="reset">Start over</button>
     <button class="quiet" id="more">Add sheets</button>
     <button class="quiet" id="only" aria-pressed="false" hidden>Show only problems</button>
@@ -129,48 +141,48 @@
     <button data-open="listbox" id="listBtn">Add class list</button>
     <button id="zip" class="primary">Download ZIP</button>
   </div></header>
-  <p id="doneErr" hidden></p>
+  <p id="doneErr" hidden role="alert"></p>
   <div id="rows"></div>
 </section>
 
-<dialog id="settings">
-  <h2>Settings</h2>
+<dialog id="settings" aria-labelledby="settingsTitle">
+  <h2 id="settingsTitle">Settings</h2>
   <p>Check the size limits on the website you will upload to.</p>
   <div class="row"><span>Size</span>
-    <select id="preset">
+    <select id="preset" aria-label="Size preset">
       <option value="passport">Standard (passport photo)</option>
       <option value="small">Small files</option>
       <option value="large">Large, for printing</option>
       <option value="custom">Custom</option>
     </select>
   </div>
-  <div class="row"><span>Photo</span><input id="pw" type="number" value="350" min="50" max="2000"> × <input id="ph" type="number" value="450" min="50" max="2000"> <small>px, up to</small> <input id="pkb" type="number" value="50" min="5" max="2000"> <small>KB</small></div>
-  <div class="row"><span>Signature</span><input id="sw" type="number" value="300" min="50" max="2000"> × <input id="sh" type="number" value="100" min="20" max="2000"> <small>px, up to</small> <input id="skb" type="number" value="20" min="3" max="2000"> <small>KB</small></div>
+  <div class="row"><span>Photo</span><input id="pw" type="number" value="350" min="50" max="2000" aria-label="Photo width in pixels"> × <input id="ph" type="number" value="450" min="50" max="2000" aria-label="Photo height in pixels"> <small>px, up to</small> <input id="pkb" type="number" value="50" min="5" max="2000" aria-label="Photo size limit in KB"> <small>KB</small></div>
+  <div class="row"><span>Signature</span><input id="sw" type="number" value="300" min="50" max="2000" aria-label="Signature width in pixels"> × <input id="sh" type="number" value="100" min="20" max="2000" aria-label="Signature height in pixels"> <small>px, up to</small> <input id="skb" type="number" value="20" min="3" max="2000" aria-label="Signature size limit in KB"> <small>KB</small></div>
   <div class="row"><span>Sheet layout</span>
-    <select id="mode">
+    <select id="mode" aria-label="Sheet layout">
       <option value="auto">Find the grid automatically</option>
       <option value="manual">I'll set rows and columns</option>
       <option value="photos">No grid, just find photos</option>
     </select>
-    <span id="manual" hidden><input id="grows" type="number" value="3" min="1" max="10"> rows × <input id="gcols" type="number" value="3" min="1" max="10"> columns</span>
+    <span id="manual" hidden><input id="grows" type="number" value="3" min="1" max="10" aria-label="Rows"> rows × <input id="gcols" type="number" value="3" min="1" max="10" aria-label="Columns"> columns</span>
   </div>
-  <div class="row"><span>File names</span><select id="naming"><option value="id">001, 002, 003…</option><option value="name">Student name</option></select></div>
+  <div class="row"><span>File names</span><select id="naming" aria-label="File names"><option value="id">001, 002, 003…</option><option value="name">Student name</option></select></div>
   <div class="row"><span>Names</span><label><input id="read" type="checkbox" checked> Read handwritten names (Marathi)</label></div>
   <div class="actions"><button class="primary" data-close>Done</button></div>
 </dialog>
 
-<dialog id="adjust">
+<dialog id="adjust" aria-labelledby="adjTitle">
   <h2 id="adjTitle">Adjust photo</h2>
   <p>Drag the box to where it should be. Use the slider to make it bigger or smaller.</p>
-  <div id="stage"><img id="adjImg" alt="" draggable="false"><div id="cropbox"></div></div>
+  <div id="stage"><img id="adjImg" alt="Cell to adjust" draggable="false"><div id="cropbox"></div></div>
   <input id="adjSize" type="range" min="15" max="100" aria-label="Size of the box">
   <div class="actions"><button class="quiet" data-close>Cancel</button><button class="primary" id="adjApply">Use this</button></div>
 </dialog>
 
-<dialog id="listbox">
-  <h2>Class list</h2>
+<dialog id="listbox" aria-labelledby="listTitle">
+  <h2 id="listTitle">Class list</h2>
   <p>Paste your class list, one student per line. Names fill in by themselves, and any other columns (roll number, English name) go into the spreadsheet.</p>
-  <textarea id="list" rows="10" spellcheck="false" placeholder="कंठे प्रतिक्षा साईनाथ&#10;गायकवाड श्रद्धा राजाराम"></textarea>
+  <textarea id="list" rows="10" spellcheck="false" aria-label="Class list" placeholder="कंठे प्रतिक्षा साईनाथ&#10;गायकवाड श्रद्धा राजाराम"></textarea>
   <div class="actions"><button class="primary" data-close>Done</button></div>
 </dialog>
 <datalist id="names"></datalist>
